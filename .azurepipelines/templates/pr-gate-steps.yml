@@ -118,7 +118,7 @@ steps:
     publishRunAttachments: true # Optional
 
 # Copy the build logs to the artifact staging directory
-- task: CopyFiles@2
+- task: CopyFiles@2.209.0
   displayName: "Copy build logs"
   inputs:
     targetFolder: '$(Build.ArtifactStagingDirectory)'
