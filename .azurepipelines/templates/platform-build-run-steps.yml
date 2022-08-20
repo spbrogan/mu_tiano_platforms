@@ -63,7 +63,7 @@ steps:
 # MU_CHANGE [END]
 
 # trim the package list if this is a PR
-- task: CmdLine@1
+- task: CmdLine@2.201.1
   displayName: Check if ${{ parameters.build_pkg }} need testing
   inputs:
     filename: stuart_pr_eval
@@ -72,7 +72,7 @@ steps:
   condition: eq(variables['Build.Reason'], 'PullRequest')
 
  # Setup repo
-- task: CmdLine@1
+- task: CmdLine@2.201.1
   displayName: Setup
   inputs:
     filename: stuart_setup
@@ -80,7 +80,7 @@ steps:
   condition: and(gt(variables.pkg_count, 0), succeeded())
 
 # Stuart Update
-- task: CmdLine@1
+- task: CmdLine@2.201.1
   displayName: Update
   inputs:
     filename: stuart_update
@@ -100,7 +100,7 @@ steps:
 - ${{ parameters.extra_install_step }}
 
 # Build
-- task: CmdLine@1
+- task: CmdLine@2.201.1
   displayName: Build
   inputs:
     filename: stuart_build
@@ -108,7 +108,7 @@ steps:
   condition: and(gt(variables.pkg_count, 0), succeeded())
 
 # Run
-- task: CmdLine@1
+- task: CmdLine@2.201.1
   displayName: Run to shell
   inputs:
     filename: stuart_build
