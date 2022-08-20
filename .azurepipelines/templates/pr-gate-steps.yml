@@ -139,7 +139,7 @@ steps:
   condition: succeededOrFailed()
 
 # Publish build artifacts to Azure Artifacts/TFS or a file share
-- task: PublishBuildArtifacts@1
+- task: PublishBuildArtifacts@1.200.0
   continueOnError: true
   displayName: "Publish build logs"
   inputs:
