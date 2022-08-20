@@ -39,7 +39,7 @@ steps:
   clean: true
   #mu_change - can't limit depth if we want to use PR_EVAL - fetchDepth: 1
 
-- task: UsePythonVersion@0
+- task: UsePythonVersion@0.206.0
   inputs:
     versionSpec: "3.8.x"
     architecture: "x64"

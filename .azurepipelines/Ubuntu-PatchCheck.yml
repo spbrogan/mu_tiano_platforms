@@ -27,7 +27,7 @@ steps:
 - checkout: self
   clean: true
 
-- task: UsePythonVersion@0
+- task: UsePythonVersion@0.206.0
   inputs:
     versionSpec: '3.9.x'  # MU_CHANGE
     architecture: 'x64'
