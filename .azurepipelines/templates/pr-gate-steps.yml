@@ -88,7 +88,7 @@ steps:
   condition: and(gt(variables.pkg_count, 0), succeeded())
 
 # Publish Test Results to Azure Pipelines/TFS
-- task: PublishTestResults@2
+- task: PublishTestResults@2.203.0
   displayName: 'Publish junit test results'
   continueOnError: true
   condition: and( succeededOrFailed(),gt(variables.pkg_count, 0))
@@ -103,7 +103,7 @@ steps:
     publishRunAttachments: true # Optional
 
 # Publish Test Results to Azure Pipelines/TFS
-- task: PublishTestResults@2
+- task: PublishTestResults@2.203.0
   displayName: 'Publish host based test results for $(System.JobName)'
   continueOnError: true
   condition: and( succeededOrFailed(), gt(variables.pkg_count, 0))
