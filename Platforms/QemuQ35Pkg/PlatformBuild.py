@@ -308,57 +308,45 @@ class PlatformBuilder(UefiBuilder, BuildSettingsManager):
         shutdown_after_run = (self.env.GetValue("SHUTDOWN_AFTER_RUN", "FALSE").upper() == "TRUE")
         empty_drive = (self.env.GetValue("EMPTY_DRIVE", "FALSE").upper() == "TRUE")
 
+        
+        VirtualDrivePath = self.env.GetValue("VIRTUAL_DRIVE_PATH", os.path.join(output_base, "VirtualDrive.vhd"))
+        VirtualDrive = None
         if os.name == 'nt':
-            VirtualDrivePath = self.env.GetValue("VIRTUAL_DRIVE_PATH", os.path.join(output_base, "VirtualDrive.vhd"))
             VirtualDrive = VirtualDriveManager(VirtualDrivePath, self.env)
-            self.env.SetValue("VIRTUAL_DRIVE_PATH", VirtualDrivePath, "Set Virtual Drive path in case not set")
-            ut = UnitTestSupport(os.path.join(output_base, "X64"))
-
-            if empty_drive and os.path.isfile(VirtualDrivePath):
-                    os.remove(VirtualDrivePath)
-
-            if not os.path.isfile(VirtualDrivePath):
-                VirtualDrive.MakeDrive()
-
-            test_regex = self.env.GetValue("TEST_REGEX", "")
-
-            if test_regex != "":
-                ut.set_test_regex(test_regex)
-                ut.find_tests()
-                ut.copy_tests_to_virtual_drive(VirtualDrive)
-
-            if run_tests:
-                if test_regex == "":
-                    logging.warning("No tests specified using TEST_REGEX flag but RUN_TESTS is TRUE")
-                elif not empty_drive:
-                    logging.info("EMPTY_DRIVE=FALSE. This could impact your test results")
-
-                if not shutdown_after_run:
-                    logging.info("SHUTDOWN_AFTER_RUN=FALSE (default). XML test results will not be \
-                        displayed until after the QEMU instance ends")
-                ut.write_tests_to_startup_nsh(startup_nsh)
-
-            nshpath = os.path.join(output_base, "startup.nsh")
-            startup_nsh.WriteOut(nshpath, shutdown_after_run)
-
-            VirtualDrive.AddFile(nshpath)
-
         else:
-            VirtualDrivePath = self.env.GetValue("VIRTUAL_DRIVE_PATH", os.path.join(output_base, "VirtualDrive"))
-            logging.warning("Linux currently isn't supported for the virtual drive. Falling back to an older method")
+            VirtualDrive = VirtualDriveManagerLinux(VirtualDrivePath, self.env)
 
-            if run_tests:
-                logging.critical("Linux doesn't support running unit tests due to lack of VHD support")
+        self.env.SetValue("VIRTUAL_DRIVE_PATH", VirtualDrivePath, "Set Virtual Drive path in case not set")
+        ut = UnitTestSupport(os.path.join(output_base, "X64"))
 
-            if os.path.exists(VirtualDrivePath) and empty_drive:
-                shutil.rmtree(VirtualDrivePath)
+        if empty_drive and os.path.isfile(VirtualDrivePath):
+                os.remove(VirtualDrivePath)
 
-            if not os.path.exists(VirtualDrivePath):
-                os.makedirs(VirtualDrivePath)
+        if not os.path.isfile(VirtualDrivePath):
+            VirtualDrive.MakeDrive()
 
-            nshpath = os.path.join(VirtualDrivePath, "startup.nsh")
-            self.env.SetValue("VIRTUAL_DRIVE_PATH", VirtualDrivePath, "Set Virtual Drive path in case not set")
-            startup_nsh.WriteOut(nshpath, shutdown_after_run)
+        test_regex = self.env.GetValue("TEST_REGEX", "")
+
+        if test_regex != "":
+            ut.set_test_regex(test_regex)
+            ut.find_tests()
+            ut.copy_tests_to_virtual_drive(VirtualDrive)
+
+        if run_tests:
+            if test_regex == "":
+                logging.warning("No tests specified using TEST_REGEX flag but RUN_TESTS is TRUE")
+            elif not empty_drive:
+                logging.info("EMPTY_DRIVE=FALSE. This could impact your test results")
+
+            if not shutdown_after_run:
+                logging.info("SHUTDOWN_AFTER_RUN=FALSE (default). XML test results will not be \
+                    displayed until after the QEMU instance ends")
+            ut.write_tests_to_startup_nsh(startup_nsh)
+
+        nshpath = os.path.join(output_base, "startup.nsh")
+        startup_nsh.WriteOut(nshpath, shutdown_after_run)
+
+        VirtualDrive.AddFile(nshpath)
 
         ret = self.Helper.QemuRun(self.env)
         if ret != 0:
@@ -473,6 +461,67 @@ class VirtualDriveManager(object):
 
     def ExtractFile(self, VirtualFilePath, HostFilePath:os.PathLike):
         ret = RunCmd("FileExtract", f"{VirtualFilePath} {HostFilePath} {self.path_to_vhd}")
+        return ret
+
+class VirtualDriveManagerLinux(object):
+
+    def __init__(self, vhd_path:os.PathLike, env:object):
+        self.path_to_vhd = os.path.abspath(vhd_path)
+        self.path_to_mount = '/mnt'
+        self._env = env
+
+    def mount(self):
+        ret = RunCmd("mount", f'-o loop {self.path_to_vhd} {self.path_to_mount}')
+        if ret != 0:
+            logging.error("Failed to mount VHD")
+            return ret
+    def unmount(self):
+        ret = RunCmd("umount", f'{self.path_to_mount}')
+        if ret != 0:
+            logging.error("Failed to umount VHD")
+            return ret
+
+    def MakeDrive(self, size: int=60):
+        # dd if=/dev/zero of=sean2.raw bs=1M count=1024
+        # mkfs.vfat -R sean2.raw 
+        # mount -o loop sean2.raw /mnt
+        # copy files
+        # umnount /mnt
+        (d, f)= os.path.split(self.path_to_vhd)
+        ret = RunCmd("dd", f'if=/dev/zero of={f} bs=1M count={size}', workingdir=d)
+        if ret != 0:
+            logging.error("Failed to create raw VHD file")
+            return ret
+
+        ret = RunCmd("mkfs.vfat", f"{f}", workingdir=d)
+        if ret != 0:
+            logging.error("Failed to format VHD")
+            return ret
+        return ret
+
+    def AddFile(self, HostFilePath:os.PathLike):
+        file_name = os.path.basename(HostFilePath)
+        # mount
+        self.mount()
+        ret = RunCmd("cp", f"{HostFilePath} {os.path.join(self.path_to_mount, file_name)}")
+        self.unmount()
+        return ret
+
+    def GetFileContent(self, VirtualFilePath, HostFilePath: os.PathLike=None):
+        temp_extract_path = HostFilePath
+        if temp_extract_path == None:
+            temp_extract_path = tempfile.mktemp()
+        logging.info(f"Extracting {VirtualFilePath} to {temp_extract_path}")
+        ret = self.ExtractFile(VirtualFilePath, temp_extract_path)
+        if ret != 0:
+            raise FileNotFoundError(VirtualFilePath)
+        with open(temp_extract_path, "rb") as f:
+            return f.read()
+
+    def ExtractFile(self, VirtualFilePath, HostFilePath:os.PathLike):
+        self.mount()
+        ret = RunCmd("cp", f"{VirtualFilePath} {HostFilePath}")
+        self.unmount()
         return ret
 
 
